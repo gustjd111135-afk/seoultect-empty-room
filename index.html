@@ -311,7 +311,7 @@ a{color:var(--navy2)}
     <div class="adcards">
       <!-- ① AI 파일 추가 -->
       <div class="adcard">
-        <div class="adcard-h">① 시간표 파일로 한 번에 추가 <small>PDF·텍스트를 넣으면 AI가 읽고, 확인 후 반영합니다</small></div>
+        <div class="adcard-h">① 시간표 파일로 한 번에 추가 <small>교직원이 접근 가능한 강의실 시간표를 PDF 형식으로 넣거나 시간표를 텍스트로 적으면, AI가 읽어 표로 정리합니다. 확인 후 반영하세요.</small></div>
         <div class="adcard-b">
           <label for="pdfFile">시간표 PDF 업로드 (또는 아래에 붙여넣기)</label>
           <input id="pdfFile" type="file" accept=".pdf,.txt" style="padding:7px" />
@@ -803,6 +803,52 @@ document.getElementById("addClass").addEventListener("click",()=>{
   주간그리기(); 다시그리기();
 });
 
+// PDF 표 좌표 복원 — 요일(가로)·교시(세로) 격자를 좌표로 재구성
+async function PDF표복원(pdf){
+  const DAYS=["월","화","수","목","금","토"];
+  const XB=[57,144,231,318,405,492,580]; // 요일 열 경계(학교 양식 고정)
+  const dayOf=x=>{ if(x<XB[0]||x>=XB[6]) return null; for(let i=0;i<6;i++){ if(x<XB[i+1]) return DAYS[i]; } return null; };
+  const junk=/출력자|안해림|^\d+\/\d+$|\d{4}-\d{2}-\d{2}|\d{2}:\d{2}:\d{2}|요일$|^교시$|^학과|수강인원|집중이수|과목코드|이수구분|담당교수|강좌/;
+  const out=[];
+  for(let pn=1; pn<=pdf.numPages; pn++){
+    const page=await pdf.getPage(pn);
+    const H=page.getViewport({scale:1}).height;
+    const tc=await page.getTextContent();
+    const items=tc.items.filter(it=>it.str&&it.str.trim()).map(it=>({
+      s:it.str.trim(), x:it.transform[4]+(it.width||0)/2, top:H-it.transform[5]
+    }));
+    // 교시 라벨(x<55) top 클러스터
+    const labels=items.filter(it=>it.x<55).sort((a,b)=>a.top-b.top);
+    const cl=[];
+    for(const it of labels){
+      if(cl.length && Math.abs(it.top-cl[cl.length-1].top)<12) cl[cl.length-1].s+=it.s;
+      else cl.push({top:it.top,s:it.s});
+    }
+    const periods=[];
+    for(const c of cl){ const m=c.s.match(/(\d+)\s*교시/); if(m) periods.push({k:+m[1],top:c.top}); }
+    periods.sort((a,b)=>a.top-b.top);
+    if(!periods.length) continue;
+    const bands=periods.map((p,i)=>({k:p.k,top:p.top,end:i+1<periods.length?periods[i+1].top:p.top+62}));
+    const firsttop=periods[0].top;
+    const cells={};
+    for(const it of items){
+      if(it.top<firsttop-5) continue;
+      const d=dayOf(it.x); if(!d) continue;
+      const b=bands.find(bb=>it.top>=bb.top-3&&it.top<bb.end-3); if(!b) continue;
+      const key=d+"|"+b.k; (cells[key]=cells[key]||[]).push(it.s);
+    }
+    for(const d of DAYS){
+      const lines=[];
+      for(const b of bands){
+        const toks=(cells[d+"|"+b.k]||[]).join("").replace(/\s{2,}/g," ").trim();
+        if(toks && !junk.test(toks)) lines.push(b.k+"교시: "+toks);
+      }
+      if(lines.length) out.push("=== "+d+"요일 ===\n"+lines.join("\n"));
+    }
+  }
+  return out.join("\n");
+}
+
 // ── 관리자: AI 파일 추가 ──
 document.getElementById("pdfFile").addEventListener("change",async e=>{
   const file=e.target.files[0]; if(!file) return;
@@ -811,8 +857,11 @@ document.getElementById("pdfFile").addEventListener("change",async e=>{
     if(file.name.toLowerCase().endsWith(".pdf")){
       if(!window.pdfjsLib) throw new Error("no pdfjs");
       const buf=await file.arrayBuffer(); const pdf=await pdfjsLib.getDocument({data:buf}).promise;
-      let text=""; for(let i=1;i<=pdf.numPages;i++){ const p=await pdf.getPage(i); const c=await p.getTextContent(); for(const it of c.items){ text+=it.str; if(it.hasEOL) text+="\n"; } text+="\n"; }
-      text=text.replace(/[ \t]{2,}/g," ").replace(/\n{3,}/g,"\n\n").trim();
+      let text=await PDF표복원(pdf);
+      if(!text || text.length<20){
+        text=""; for(let i=1;i<=pdf.numPages;i++){ const p=await pdf.getPage(i); const c=await p.getTextContent(); for(const it of c.items){ text+=it.str; if(it.hasEOL) text+="\n"; } text+="\n"; }
+        text=text.replace(/[ \t]{2,}/g," ").replace(/\n{3,}/g,"\n\n").trim();
+      }
       if(text.length<5) throw new Error("empty");
       document.getElementById("rawText").value=text; msg.textContent="PDF에서 텍스트를 읽었어요. [AI로 시간표 읽기]를 누르세요.";
     }else{ document.getElementById("rawText").value=await file.text(); msg.textContent="파일을 불러왔어요. [AI로 시간표 읽기]를 누르세요."; }
@@ -828,15 +877,17 @@ document.getElementById("parseBtn").addEventListener("click",async()=>{
   if(!raw){ msg.style.color="var(--busy)"; msg.textContent="시간표 내용을 넣어주세요."; return; }
   msg.style.color="var(--muted)"; msg.textContent="AI가 시간표를 읽는 중…"; btn.disabled=true; review.className="review";
   try{
-    const 프롬프트=`아래는 '${관리자건물}'의 특정 강의실 주간 수업 시간표를 표에서 복사한 텍스트야. 표 구조가 줄바꿈으로 흐트러져 있을 수 있으니, 요일·교시(또는 시간)·과목 패턴을 찾아 최대한 정확히 복원해서 강의 일정을 JSON 배열로만 출력해. 설명·코드블록 없이 JSON만.
-각 항목 형식: {"방":"${관리자건물} 201","요일":1,"시작":"09:00","종료":"10:30","과목":"공업수학"}
-- 표에는 학과·수강인원·과목코드·이수구분·학점·담당교수 등 불필요한 정보가 섞여 있으니, 그중 과목명만 골라내고 나머지 열은 무시해.
+    const 프롬프트=`아래는 '${관리자건물}'의 한 강의실 주간 시간표다. 요일과 교시별 칸으로 정리되어 있을 수 있고, 각 칸에는 '학과 수강인원 과목명 과목코드 강좌 이수구분 학점 교수'가 섞여 있다. 여기서 과목명만 추출해 강의 일정을 JSON 배열로만 출력해. 설명·코드블록 없이 JSON만.
+각 항목 형식: {"방":"${관리자건물} 201","요일":1,"시작":"09:00","종료":"10:50","과목":"과목명"}
+규칙:
 - 방 이름은 반드시 "${관리자건물} " 뒤에 호실 숫자만 붙여 (예: ${관리자건물} 201).
-- 요일은 월=1 화=2 수=3 목=4 금=5 숫자로.
-- 시간은 24시간제 HH:MM. 교시로만 되어 있으면 1교시=09:00 기준으로 N교시 시작=(8+N):00, 끝=(8+N):50으로 변환하고, 연속된 교시는 합쳐서 하나로.
+- 요일: 월=1 화=2 수=3 목=4 금=5.
+- 같은 과목명이 연속된 교시에 걸쳐 있으면 하나로 합쳐라(시작=첫 교시, 종료=마지막 교시). 과목명이 안 보이고 코드·교수만 있는 칸은 바로 위 같은 과목의 연속으로 취급.
+- 교시→시각: N교시 시작=(8+N):00, 끝=(8+N):50 (예: 1교시=09:00~09:50, 6교시=14:00~14:50).
+- 학과·수강인원(숫자)·과목코드(숫자)·이수구분·학점·교수 이름은 모두 무시하고 과목명만 남겨라.
 - 확실하지 않은 항목은 넣지 마.
 
-[시간표 텍스트]
+[시간표]
 ${raw}`;
     const res=await fetch("/api/parse",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:프롬프트})});
     const data=await res.json();
