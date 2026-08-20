@@ -809,7 +809,7 @@ async function PDF표복원(pdf){
   const XB=[57,144,231,318,405,492,580]; // 요일 열 경계(학교 양식 고정)
   const dayOf=x=>{ if(x<XB[0]||x>=XB[6]) return null; for(let i=0;i<6;i++){ if(x<XB[i+1]) return DAYS[i]; } return null; };
   const junk=/출력자|안해림|^\d+\/\d+$|\d{4}-\d{2}-\d{2}|\d{2}:\d{2}:\d{2}|요일$|^교시$|^학과|수강인원|집중이수|과목코드|이수구분|담당교수|강좌/;
-  const out=[];
+  const out=[]; let 건물room="";
   for(let pn=1; pn<=pdf.numPages; pn++){
     const page=await pdf.getPage(pn);
     const H=page.getViewport({scale:1}).height;
@@ -817,6 +817,7 @@ async function PDF표복원(pdf){
     const items=tc.items.filter(it=>it.str&&it.str.trim()).map(it=>({
       s:it.str.trim(), x:it.transform[4]+(it.width||0)/2, top:H-it.transform[5]
     }));
+    if(pn===1){ const ht=items.map(it=>it.s).join(""); const hm=ht.match(/현황\s*([가-힣]+관)\s*-\s*(\d{2,3})/)||ht.match(/([가-힣]{2,4}관)\s*-\s*(\d{2,3})\s*\(?강의실/); if(hm) 건물room="[강의실] "+hm[1]+" "+hm[2]; }
     // 교시 라벨(x<55) top 클러스터
     const labels=items.filter(it=>it.x<55).sort((a,b)=>a.top-b.top);
     const cl=[];
@@ -846,7 +847,7 @@ async function PDF표복원(pdf){
       if(lines.length) out.push("=== "+d+"요일 ===\n"+lines.join("\n"));
     }
   }
-  return out.join("\n");
+  return (건물room? 건물room+"\n":"")+out.join("\n");
 }
 
 // ── 관리자: AI 파일 추가 ──
@@ -880,7 +881,7 @@ document.getElementById("parseBtn").addEventListener("click",async()=>{
     const 프롬프트=`아래는 '${관리자건물}'의 한 강의실 주간 시간표다. 요일과 교시별 칸으로 정리되어 있을 수 있고, 각 칸에는 '학과 수강인원 과목명 과목코드 강좌 이수구분 학점 교수'가 섞여 있다. 여기서 과목명만 추출해 강의 일정을 JSON 배열로만 출력해. 설명·코드블록 없이 JSON만.
 각 항목 형식: {"방":"${관리자건물} 201","요일":1,"시작":"09:00","종료":"10:50","과목":"과목명"}
 규칙:
-- 방 이름은 반드시 "${관리자건물} " 뒤에 호실 숫자만 붙여 (예: ${관리자건물} 201).
+- 방 이름: 텍스트 맨 위 [강의실] 또는 "○○관 - 번호" 형태로 건물·호실이 적혀 있으면 그것을 그대로 써라 (예: 무궁관 106). 그런 표시가 없을 때만 건물을 "${관리자건물}"로 하고 호실 숫자만 붙여라.
 - 요일: 월=1 화=2 수=3 목=4 금=5.
 - 같은 과목명이 연속된 교시에 걸쳐 있으면 하나로 합쳐라(시작=첫 교시, 종료=마지막 교시). 과목명이 안 보이고 코드·교수만 있는 칸은 바로 위 같은 과목의 연속으로 취급.
 - 교시→시각: N교시 시작=(8+N):00, 끝=(8+N):50 (예: 1교시=09:00~09:50, 6교시=14:00~14:50).
