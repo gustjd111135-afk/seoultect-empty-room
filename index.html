@@ -841,7 +841,7 @@ async function PDF표복원(pdf){
     for(const d of DAYS){
       const lines=[];
       for(const b of bands){
-        const toks=(cells[d+"|"+b.k]||[]).join("").replace(/\s{2,}/g," ").trim();
+        let toks=(cells[d+"|"+b.k]||[]).join("").replace(/\d{6,}/g,"").replace(/(전공|기초|교양|공통|일반)(필수|선택)\d?/g,"").replace(/\s{2,}/g," ").trim();
         if(toks && !junk.test(toks)) lines.push(b.k+"교시: "+toks);
       }
       if(lines.length) out.push("=== "+d+"요일 ===\n"+lines.join("\n"));
@@ -890,13 +890,20 @@ document.getElementById("parseBtn").addEventListener("click",async()=>{
 
 [시간표]
 ${raw}`;
-    const res=await fetch("/api/parse",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:프롬프트})});
-    const data=await res.json();
-    if(data.error) throw new Error(data.error);
-    let txt=(data.text||"").trim();
+    let 항목들=null;
+    for(let _a=0; _a<2 && !항목들; _a++){
+     try{
+      if(_a>0){ msg.textContent="AI가 시간표를 다시 읽는 중…"; }
+      const res=await fetch("/api/parse",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:프롬프트})});
+      const data=await res.json();
+      if(data.error) throw new Error(data.error);
+      let txt=(data.text||"").trim();
     txt=txt.replace(/^\`\`\`json/i,"").replace(/^\`\`\`/,"").replace(/\`\`\`$/,"").trim();
-    const 항목들=JSON.parse(txt);
-    if(!Array.isArray(항목들)||!항목들.length) throw new Error("empty");
+      const p=JSON.parse(txt);
+      if(!Array.isArray(p)||!p.length) throw new Error("empty");
+      항목들=p;
+     }catch(_e){ if(_a===1) throw _e; }
+    }
     window._파싱결과=항목들;
     const 요일글=["","월","화","수","목","금"];
     review.innerHTML=`<table><thead><tr><th>추가</th><th>강의실</th><th>요일</th><th>시간</th><th>과목</th></tr></thead><tbody>`+
