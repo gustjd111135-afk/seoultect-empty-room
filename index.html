@@ -811,9 +811,10 @@ document.getElementById("pdfFile").addEventListener("change",async e=>{
     if(file.name.toLowerCase().endsWith(".pdf")){
       if(!window.pdfjsLib) throw new Error("no pdfjs");
       const buf=await file.arrayBuffer(); const pdf=await pdfjsLib.getDocument({data:buf}).promise;
-      let text=""; for(let i=1;i<=pdf.numPages;i++){ const p=await pdf.getPage(i); const c=await p.getTextContent(); text+=c.items.map(it=>it.str).join(" ")+"\n"; }
-      if(text.trim().length<5) throw new Error("empty");
-      document.getElementById("rawText").value=text.trim(); msg.textContent="PDF에서 텍스트를 읽었어요. [AI로 시간표 읽기]를 누르세요.";
+      let text=""; for(let i=1;i<=pdf.numPages;i++){ const p=await pdf.getPage(i); const c=await p.getTextContent(); for(const it of c.items){ text+=it.str; if(it.hasEOL) text+="\n"; } text+="\n"; }
+      text=text.replace(/[ \t]{2,}/g," ").replace(/\n{3,}/g,"\n\n").trim();
+      if(text.length<5) throw new Error("empty");
+      document.getElementById("rawText").value=text; msg.textContent="PDF에서 텍스트를 읽었어요. [AI로 시간표 읽기]를 누르세요.";
     }else{ document.getElementById("rawText").value=await file.text(); msg.textContent="파일을 불러왔어요. [AI로 시간표 읽기]를 누르세요."; }
   }catch(err){ msg.style.color="var(--busy)"; msg.textContent="이 파일에서 글자를 자동으로 읽지 못했어요. 시간표를 아래 칸에 직접 붙여넣어 주세요."; }
 });
@@ -829,6 +830,7 @@ document.getElementById("parseBtn").addEventListener("click",async()=>{
   try{
     const 프롬프트=`아래는 '${관리자건물}'의 특정 강의실 주간 수업 시간표를 표에서 복사한 텍스트야. 표 구조가 줄바꿈으로 흐트러져 있을 수 있으니, 요일·교시(또는 시간)·과목 패턴을 찾아 최대한 정확히 복원해서 강의 일정을 JSON 배열로만 출력해. 설명·코드블록 없이 JSON만.
 각 항목 형식: {"방":"${관리자건물} 201","요일":1,"시작":"09:00","종료":"10:30","과목":"공업수학"}
+- 표에는 학과·수강인원·과목코드·이수구분·학점·담당교수 등 불필요한 정보가 섞여 있으니, 그중 과목명만 골라내고 나머지 열은 무시해.
 - 방 이름은 반드시 "${관리자건물} " 뒤에 호실 숫자만 붙여 (예: ${관리자건물} 201).
 - 요일은 월=1 화=2 수=3 목=4 금=5 숫자로.
 - 시간은 24시간제 HH:MM. 교시로만 되어 있으면 1교시=09:00 기준으로 N교시 시작=(8+N):00, 끝=(8+N):50으로 변환하고, 연속된 교시는 합쳐서 하나로.
