@@ -660,6 +660,7 @@ function 정리(t){
 }
 async function 물어보기(질문){
   const answer=document.getElementById("answer"), send=document.getElementById("send");
+  const _qi=document.getElementById("q"); if(_qi) _qi.value="";
   answer.className="answer show"; answer.textContent="생각하는 중…"; send.disabled=true;
   const 상황=상황요약();
   try{
@@ -732,6 +733,11 @@ function 겹치는수업(방,요일,시작,종료){ const s=분(시작), e=분(�
 function 교시옵션(){ let o=""; for(let p=1;p<=최대교시;p++){ o+=`<option value="${p}">${p}교시 (${교시시각(p)[0]})</option>`; } return o; }
 const 요일열=[1,2,3,4,5], 요일글표=["","월","화","수","목","금"];
 function 관리자초기화(){
+  const rt=document.getElementById("rawText"); if(rt) rt.value="";
+  const pf=document.getElementById("pdfFile"); if(pf) pf.value="";
+  const pm=document.getElementById("parseMsg"); if(pm) pm.textContent="";
+  const rv=document.getElementById("review"); if(rv){ rv.className="review"; rv.innerHTML=""; }
+  const em=document.getElementById("editMsg"); if(em) em.textContent="";
   const ab=document.getElementById("admBuilding");
   if(ab){ ab.innerHTML=Object.keys(건물목록).map(b=>`<option value="${b}">${b}</option>`).join(""); ab.value=관리자건물; }
   const at=document.getElementById("admTitle"); if(at) at.textContent=`${관리자건물} 시간표 관리`;
