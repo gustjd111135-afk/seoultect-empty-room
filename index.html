@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>무궁관 강의실 현황 시스템</title>
+<title>서울과기대 강의실 현황 시스템</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
@@ -199,6 +199,52 @@ a{color:var(--navy2)}
 .slot.공실 .what{color:var(--free);font-weight:700}
 .slot .nowtag{margin-left:auto;font-size:11px;font-weight:800;color:var(--accent);background:#e6eefb;padding:3px 9px;border-radius:20px}
 .hidden{display:none !important}
+
+/* ===== 모바일 반응형 (기본) ===== */
+@media (max-width:720px){
+  .topbar{padding:0 14px;gap:10px;height:48px}
+  .logo{font-size:13px;gap:7px}
+  .logoimg{height:22px}
+  .btn.key{padding:7px 10px;font-size:12px}
+
+  /* 학생: 사이드바를 상단 알약으로 */
+  .layout{flex-direction:column;align-items:stretch}
+  .sidebar{width:auto;min-height:auto;border-right:none;border-bottom:1px solid var(--line);
+    padding:8px 12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .side-group{display:none}
+  .side-item{padding:7px 12px;font-size:12px;border:1px solid var(--line);border-radius:20px}
+  .side-item.on{background:var(--navy);color:#fff}
+  .side-item.on::before{display:none}
+  .side-item.soon{display:none}
+
+  .content{padding:14px 14px 32px}
+  .hrow{flex-direction:column;gap:10px}
+  .htitle{font-size:18px}
+  .timectl{flex-wrap:wrap;gap:6px}
+
+  /* 메인 + AI 도우미 세로 배치 */
+  .cols{grid-template-columns:1fr;gap:14px}
+  .airail{min-height:auto}
+
+  /* 상태 카드 2×2 */
+  .pills{flex-wrap:wrap;gap:8px}
+  .pill{flex:1 1 45%;padding:11px 12px;font-size:13px}
+
+  /* 층별: 층 라벨 한 줄, 카드 아래로 */
+  .frow{flex-wrap:wrap;gap:8px 12px;padding:12px 12px}
+  .finfo{width:100%}
+  .rc{min-width:130px;max-width:none}
+
+  /* 공강 매칭 드롭다운 줄바꿈 허용 */
+  .match-row{flex-wrap:wrap}
+
+  /* 관리자: 두 카드 세로 + 주간표 가로 스크롤 */
+  .adcards{grid-template-columns:1fr;gap:14px}
+  .pagehead h1{font-size:20px}
+  .row2,.addrow{flex-wrap:wrap}
+  #weekGrid{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .wgrid{min-width:480px}
+}
 </style>
 </head>
 <body>
@@ -659,12 +705,14 @@ function 정리(t){
     .trim();
 }
 async function 물어보기(질문){
+  if(window._응답중) return;
   const answer=document.getElementById("answer"), send=document.getElementById("send");
+  window._응답중=true;
   const _qi=document.getElementById("q"); if(_qi) _qi.value="";
   answer.className="answer show"; answer.textContent="생각하는 중…"; send.disabled=true;
   const 상황=상황요약();
   try{
-    const 프롬프트=`너는 교내 강의실·공부 공간 안내 도우미야. 아래 '현재 상황'만 근거로 답해. 지어내지 마. 조건에 맞는 곳을 하나만 고르지 말고 해당하는 곳을 전부 나열해(예: 빈 강의실을 물으면 지금 비어있는 강의실을 모두). 각 항목은 줄바꿈으로 간단히 나열해. 강의실은 수업용 개별 책상이라 단체석·그룹석은 로비·카페에만 있어. '단체석/여럿이/그룹/N명' 요청은 단체석 있는 로비·카페를 전부 알려줘. 질문이 강의실·공부 공간과 관련이 없으면(예: 배고파, 날씨) 다른 말 하지 말고 정확히 "관련 강의실 정보가 없어요."라고만 답해. 마크다운 기호(**, ##, ---)나 이모지, 구분선은 쓰지 말고 자연스러운 문장으로만. 한국어로 간결하게.
+    const 프롬프트=`너는 교내 강의실·공부 공간 안내 도우미야. 아래 '현재 상황'만 근거로 답해. 지어내지 마. 조건에 맞는 곳을 하나만 고르지 말고 해당하는 곳을 전부 나열해(예: 빈 강의실을 물으면 지금 비어있는 강의실을 모두). 각 항목은 줄바꿈으로 간단히 나열해. 강의실은 수업용 개별 책상이라 단체석·그룹석은 로비·카페에만 있어. '단체석/여럿이/그룹/N명' 요청은 단체석 있는 로비·카페를 전부 알려줘. 질문이 강의실·공부 공간과 관련이 없으면(예: 배고파, 날씨) 다른 말 하지 말고 정확히 "관련 강의실 정보가 없어요."라고만 답해. 빈 강의실·로비·카페는 학생이 공부 목적으로 자유롭게 이용할 수 있는 공간이니, ‘학교 규정을 확인하라’거나 ‘이용 가능한지 확인하라’ 같은 당부·주의는 절대 덧붙이지 마. 물어본 정보만 답해. 마크다운 기호(**, ##, ---)나 이모지, 구분선은 쓰지 말고 자연스러운 문장으로만. 한국어로 간결하게.
 
 [현재 상황] 기준 시각: ${상황.시간}
 ${상황.방들}
@@ -676,7 +724,7 @@ ${상황.방들}
     const txt=(data.text||"").trim();
     answer.innerHTML=(정리(txt)||대체답변(질문))+`<span class="tiny">AI 도우미의 추천입니다. 실제 이용 여부는 직접 확인하세요.</span>`;
   }catch(e){ answer.innerHTML=대체답변(질문)+`<span class="tiny">지금은 간단 추천으로 답했어요. (AI 연결 시 더 자연스럽게 답합니다.)</span>`; }
-  send.disabled=false;
+  window._응답중=false; send.disabled=false;
 }
 document.getElementById("send").addEventListener("click",()=>{const q=document.getElementById("q").value.trim(); if(q) 물어보기(q);});
 document.getElementById("q").addEventListener("keydown",e=>{if(e.key==="Enter"){const q=e.target.value.trim(); if(q) 물어보기(q);}});
@@ -883,7 +931,8 @@ document.getElementById("pdfFile").addEventListener("change",async e=>{
 });
 document.getElementById("clearBtn").addEventListener("click",()=>{
   document.getElementById("rawText").value=""; document.getElementById("parseMsg").textContent="";
-  document.getElementById("review").className="review";
+  document.getElementById("review").className="review"; document.getElementById("review").innerHTML="";
+  const _pf=document.getElementById("pdfFile"); if(_pf) _pf.value="";
 });
 document.getElementById("parseBtn").addEventListener("click",async()=>{
   const raw=document.getElementById("rawText").value.trim();
