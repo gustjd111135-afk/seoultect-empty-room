@@ -202,6 +202,9 @@ a{color:var(--navy2)}
 
 /* ===== 모바일 반응형 (기본) ===== */
 @media (max-width:720px){
+  /* PC용 최소폭 해제 — 폰 화면에 딱 맞게 */
+  html,body{min-width:0 !important;max-width:100%;overflow-x:hidden}
+  .search input{max-width:100%;box-sizing:border-box}
   .topbar{padding:0 14px;gap:10px;height:48px}
   .logo{font-size:13px;gap:7px}
   .logoimg{height:22px}
